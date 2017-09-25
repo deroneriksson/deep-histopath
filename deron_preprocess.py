@@ -8,7 +8,10 @@ import datetime
 import multiprocessing
 import matplotlib.pyplot as plt
 import numpy as np
-
+import skimage
+from skimage import data, filters
+from skimage.feature import canny
+import cv2
 
 def open_slide(filename):
   """
@@ -238,6 +241,12 @@ def slide_stats():
 
 
 def slide_info(display_all_properties=False):
+  """
+  Display information (such as properties) about training images.
+
+  Args:
+    display_all_properties: If True, display all available slide properties.
+  """
   num_train_images = get_num_train_images()
   obj_pow_20_list = []
   obj_pow_40_list = []
@@ -271,6 +280,70 @@ def slide_info(display_all_properties=False):
   print("??x Slides: " + str(obj_pow_other_list))
 
 
+def pil_to_np(pil_img):
+  """
+  Convert PIL Image to Numpy array. Note that RGB PIL (w, h) -> NUMPY (h, w, 3).
+
+  Args:
+    pil_img: The PIL Image.
+
+  Returns:
+    The image converted to a Numpy array.
+  """
+  return np.asarray(pil_img)
+
+
+def np_to_pil(np_img):
+  """
+  Convert Numpy array to PIL Image.
+
+  Args:
+    np_img: The image represented as a Numpy array.
+
+  Returns:
+     The image converted to a PIL Image.
+  """
+  return Image.fromarray(np_img)
+
+
+def filter_rgb_to_grayscale(np_img):
+  """
+  Convert RGB Numpy array to grayscale Numpy array.
+
+  Args:
+    np_img: RGB Image as Numpy array.
+
+  Returns:
+    Grayscale image as Numpy array.
+  """
+  # Another possibility: [0.299, 0.587, 0.114]
+  return np.dot(np_img[..., :3], [0.2125, 0.7154, 0.0721])
+
+
+def filter_complement(np_img):
+  """
+  Obtain the complement of an image as a Numpy array.
+
+  Args:
+    np_img: Image as Numpy array.
+
+  Returns:
+    Complement image as Numpy array.
+  """
+  return 255 - np_img
+
+
+def filter_hysteresis_threshold(np_img, low, high):
+  return 255 * filters.apply_hysteresis_threshold(np_img, low, high).astype(float)
+
+
+def filter_entropy(np_img, neigh=7, thresh=5):
+  np_img = np_img / 255
+  np_img = (filters.rank.entropy(np_img, np.ones((neigh, neigh))) > thresh).astype(float)
+  return np_img * 255
+
+
+
 # Constants
 BASE_DIR = "data"
 # BASE_DIR = os.sep + "Volumes" + os.sep + "BigData" + os.sep + "TUPAC"
@@ -284,28 +357,45 @@ DEST_TRAIN_THUMB_DIR = BASE_DIR + os.sep + "training_thumbs_" + str(THUMB_SIZE)
 
 start = datetime.datetime.now()
 
-os.makedirs(DEST_TRAIN_THUMB_DIR, exist_ok=True)
+# os.makedirs(DEST_TRAIN_THUMB_DIR, exist_ok=True)
 # slide_to_thumbs(1, 15)
 # multiprocess_slide_to_thumbs()
-slide_stats()
+# slide_stats()
 # slide_info()
 
 from skimage.color import rgb2gray
 from skimage.filters import threshold_minimum, threshold_otsu, threshold_yen
 
-img_path = get_train_thumb_path(2)
-pil_img = Image.open(img_path)
-# numpy array
-np_img = np.asarray(pil_img)  # RGB PIL (w, h) -> (h, w, 3)
-print("#1" + str(np_img))
-# note: converts from 0-255 to 0-1
-np_img = rgb2gray(np_img)
-print("#2" + str(np_img))
-np_img = 1 - np_img
-print("#3" + str(np_img))
-# plt.imshow(np_img, cmap=plt.cm.gray)
+# image = data.coins()
+# plt.imshow(image)
 # plt.show()
 
+folder = "example_filters" + os.sep
+img_path = get_train_thumb_path(2)
+orig_pil_img = Image.open(img_path)
+orig_pil_img.save(folder + "01-ORIGINAL.jpg")
+# numpy array
+np_img = pil_to_np(orig_pil_img)
+# print("NP_IMG 1:" + str(np_img.shape))
+# print("NP_IMG 1b:" + str(np_img))
+np_img = filter_rgb_to_grayscale(np_img)
+np_to_pil(np_img).convert("RGB").save(folder + "02-GRAYSCALE.jpg")
+# np_img = canny(np_img, 10) *255
+# print("NP_IMG 2:" + str(np_img.shape))
+# print("NP_IMG 2b:" + str(np_img))
+np_img = filter_complement(np_img)
+np_to_pil(np_img).convert("RGB").save(folder + "03-COMPLEMENT.jpg")
+# print("NP_IMG 3:" + str(np_img.shape))
+
+#np_img = filter_entropy(np_img, 9, 5)
+#np_to_pil(np_img).convert("RGB").save(folder + "04-ENTROPY.jpg")
+
+# np_img = filter_hysteresis_threshold(np_img, 50, 100)
+# np_to_pil(np_img).convert("RGB").save(folder + "04-HYSTERESIS-THRESHOLD.jpg")
+
+# np_img = remove_small_areas(np_img)
+# plt.imshow(np_img, cmap=plt.cm.gray)
+# plt.show()
 # thresh = threshold_minimum(np_img)
 # print("THRESH:" + str(thresh))
 # mask = np_img > thresh
@@ -320,9 +410,10 @@ print("#3" + str(np_img))
 # plt.show()
 # np_img = mask.astype(float)
 
-np_img = np_img * 255
-im = Image.fromarray(np_img)
+# np_img = np_img * 255
+im = np_to_pil(np_img)  # Image.fromarray(np_img)
 im.show()
+# orig_pil_img.show()
 
 end = datetime.datetime.now()
 delta = end - start
