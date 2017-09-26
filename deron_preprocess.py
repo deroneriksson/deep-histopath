@@ -12,6 +12,12 @@ import skimage
 from skimage import data, filters
 from skimage.feature import canny
 import cv2
+from skimage.morphology import binary_closing, binary_erosion, disk, binary_opening
+from scipy.ndimage.morphology import binary_fill_holes
+
+
+# from skimage.color import rgb2gray
+# from skimage.filters import threshold_minimum, threshold_otsu, threshold_yen
 
 def open_slide(filename):
   """
@@ -280,6 +286,25 @@ def slide_info(display_all_properties=False):
   print("??x Slides: " + str(obj_pow_other_list))
 
 
+def ar_info(np_arr, name=None):
+  """
+  Display information (shape, type, max, min, etc) about a Numpy array.
+
+  Args:
+    np_arr: The Numpy array.
+    name: The name of the array.
+  """
+  np_arr = np.asarray(np_arr)
+  max = np_arr.max()
+  min = np_arr.min()
+  mean = np_arr.mean()
+  std = np_arr.std()
+  if name is None:
+    print("Array:", np_arr.shape, np_arr.dtype, "Max:", max, "Min:", min, "Mean:", mean, "Std:", std)
+  else:
+    print("%s:" % name, np_arr.shape, np_arr.dtype, "Max:", max, "Min:", min, "Mean:", mean, "Std:", std)
+
+
 def pil_to_np(pil_img):
   """
   Convert PIL Image to Numpy array. Note that RGB PIL (w, h) -> NUMPY (h, w, 3).
@@ -306,35 +331,65 @@ def np_to_pil(np_img):
   return Image.fromarray(np_img)
 
 
-def filter_rgb_to_grayscale(np_img):
+def filter_rgb_to_grayscale(np_img, type="uint8"):
   """
   Convert RGB Numpy array to grayscale Numpy array.
+  Shape (h, w, c) to (h, w).
+  Type uint8 as input.
 
   Args:
     np_img: RGB Image as Numpy array.
+    type: Type of array to return (float or uint8)
 
   Returns:
-    Grayscale image as Numpy array.
+    Grayscale image as Numpy array with shape (h, w) and type uint8.
   """
   # Another possibility: [0.299, 0.587, 0.114]
-  return np.dot(np_img[..., :3], [0.2125, 0.7154, 0.0721])
+  result = np.dot(np_img[..., :3], [0.2125, 0.7154, 0.0721])
+  if type == "float":
+    return result
+  else:
+    return result.astype("uint8")
 
 
-def filter_complement(np_img):
+def filter_complement(np_img, type="uint8"):
   """
   Obtain the complement of an image as a Numpy array.
 
   Args:
     np_img: Image as Numpy array.
+    type: Type of array to return (float or uint8).
 
   Returns:
     Complement image as Numpy array.
   """
-  return 255 - np_img
+  if type == "float":
+    return 1.0 - np_img
+  else:
+    return 255 - np_img
 
 
-def filter_hysteresis_threshold(np_img, low, high):
-  return 255 * filters.apply_hysteresis_threshold(np_img, low, high).astype(float)
+def filter_hysteresis_threshold(np_img, low, high, type="uint8"):
+  """
+  Apply two-level (hysteresis) threshold to an image as a Numpy array.
+  Type uint8 to uint8 (default)
+
+  Ars:
+    np_img: Image as Numpy array.
+    low: Low threshold (0 to 255).
+    high: High threshold (0 to 255).
+    type: Type of array to return (bool, float, or uint8).
+
+  Returns:
+    Numpy array (value 0 or 255) where 255 indicates pixel was above hysteresis threshold.
+  """
+  result = filters.apply_hysteresis_threshold(np_img, low, high)
+  if type == "bool":
+    return result
+  elif type == "float":
+    return result.astype(float)
+  else:
+    return (255 * result).astype("uint8")
 
 
 def filter_entropy(np_img, neigh=7, thresh=5):
@@ -342,6 +397,34 @@ def filter_entropy(np_img, neigh=7, thresh=5):
   np_img = (filters.rank.entropy(np_img, np.ones((neigh, neigh))) > thresh).astype(float)
   return np_img * 255
 
+
+def filter_binary_opening_fill_holes_erosion(np_img, type="uint8"):
+  result = binary_opening(np_img, disk(10))
+  result = binary_fill_holes(result)
+  result = binary_erosion(result, disk(20))
+  result = binary_erosion(result, disk(20))
+  result = binary_erosion(result, disk(20))
+  result = binary_erosion(result, disk(20))
+  if type == "bool":
+    return result
+  elif type == "float":
+    return result.astype(float)
+  else:
+    return (255 * result).astype("uint8")
+
+
+def uint8_to_mask(np_img):
+  """
+  Convert Numpy array of 0 and 255 values to 0 and 1 uint8 values
+
+  Args:
+    np_img: Image as Numpy array.
+
+  Returns:
+    Numpy array of 0 and 1 values.
+  """
+  mask = (np_img / 255).astype("uint8")
+  return mask
 
 
 # Constants
@@ -363,35 +446,84 @@ start = datetime.datetime.now()
 # slide_stats()
 # slide_info()
 
-from skimage.color import rgb2gray
-from skimage.filters import threshold_minimum, threshold_otsu, threshold_yen
 
-# image = data.coins()
-# plt.imshow(image)
-# plt.show()
 
 folder = "example_filters" + os.sep
 img_path = get_train_thumb_path(2)
 orig_pil_img = Image.open(img_path)
 orig_pil_img.save(folder + "01-ORIGINAL.jpg")
-# numpy array
 np_img = pil_to_np(orig_pil_img)
-# print("NP_IMG 1:" + str(np_img.shape))
-# print("NP_IMG 1b:" + str(np_img))
+ar_info(np_img, "Original")
+
 np_img = filter_rgb_to_grayscale(np_img)
 np_to_pil(np_img).convert("RGB").save(folder + "02-GRAYSCALE.jpg")
-# np_img = canny(np_img, 10) *255
-# print("NP_IMG 2:" + str(np_img.shape))
-# print("NP_IMG 2b:" + str(np_img))
+ar_info(np_img, "Grayscale")
+
 np_img = filter_complement(np_img)
 np_to_pil(np_img).convert("RGB").save(folder + "03-COMPLEMENT.jpg")
-# print("NP_IMG 3:" + str(np_img.shape))
+ar_info(np_img, "Complement")
 
-#np_img = filter_entropy(np_img, 9, 5)
-#np_to_pil(np_img).convert("RGB").save(folder + "04-ENTROPY.jpg")
+np_img = filter_hysteresis_threshold(np_img, 50, 100)
+np_to_pil(np_img).convert("RGB").save(folder + "04-HYSTERESIS-THRESHOLD.jpg")
+ar_info(np_img, "Hysteresis Threshold")
 
-# np_img = filter_hysteresis_threshold(np_img, 50, 100)
-# np_to_pil(np_img).convert("RGB").save(folder + "04-HYSTERESIS-THRESHOLD.jpg")
+# np_img = pil_to_np(orig_pil_img)
+# np_img = filter_rgb_to_grayscale(np_img)
+# np_img = 255*canny(np_img, 0).astype(float)
+
+# np_img = (filters.rank.entropy(np_img/255, np.ones((9, 9))) > 5).astype(float)*255
+# np_img = filters.apply_hysteresis_threshold(np_img, 50, 100)
+
+# np_img = filter_entropy(np_img, 9, 5)
+# np_to_pil(np_img).convert("RGB").save(folder + "04-ENTROPY.jpg")
+# ----------
+
+np_img = filter_binary_opening_fill_holes_erosion(np_img)
+ar_info(np_img, "Binary Opening, Fill Holes, Erosion")
+
+mask = uint8_to_mask(np_img)
+ar_info(mask, "Mask")
+np_img = pil_to_np(orig_pil_img) * np.dstack([mask, mask, mask])
+# np_to_pil(np_img).convert("RGB").save(folder + "05-BINARY-OPENING-FILL-HOLES-EROSION.jpg")
+ar_info(np_img, "After Mask")
+# ----------
+
+# np_img = np_img.astype(float) * 255
+
+from skimage.color import rgb2hed
+
+# from matplotlib.colors import LinearSegmentedColormap
+#
+# cmap_hema = LinearSegmentedColormap.from_list('mycmap', ['white', 'navy'])
+# cmap_dab = LinearSegmentedColormap.from_list('mycmap', ['white', 'saddlebrown'])
+# cmap_eosin = LinearSegmentedColormap.from_list('mycmap', ['darkviolet', 'white'])
+# ihc_hed = rgb2hed(np_img)
+# plt.imshow(ihc_hed[:, :, 2], cmap=cmap_dab)
+# plt.show()
+# x = np_img
+# x = np.uint8(cmap_dab(x)*255)
+# np_img = x[:,0:3]
+# print("####" + str(x.shape))
+# np_img = binary_closing(np_img, disk(20))
+# np_img = binary_erosion(np_img, disk(3))
+# print("3:" + str(np_img))
+# print("3 Shape:" + str(np_img.shape))
+# np_img = np_img.astype(float)*255
+
+# mask = np.dstack([np_img, np_img, np_img])/255
+# np_img = pil_to_np(orig_pil_img) * mask
+# plt.imshow(np_img)
+# plt.show()
+# se = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+# mask = cv2.erode(np_img, se, iterations=15)
+# mask = cv2.dilate(np_img, se, iterations=15)
+# np_img = np_img * mask
+
+# se1 = cv2.getStructuringElement(cv2.MORPH_RECT, (15,15))
+# se2 = cv2.getStructuringElement(cv2.MORPH_RECT, (2,2))
+# mask = cv2.morphologyEx(np_img, cv2.MORPH_CLOSE, se1)
+# mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, se2)
+# np_img = np_img * (mask/255)
 
 # np_img = remove_small_areas(np_img)
 # plt.imshow(np_img, cmap=plt.cm.gray)
@@ -411,7 +543,7 @@ np_to_pil(np_img).convert("RGB").save(folder + "03-COMPLEMENT.jpg")
 # np_img = mask.astype(float)
 
 # np_img = np_img * 255
-im = np_to_pil(np_img)  # Image.fromarray(np_img)
+im = np_to_pil(np_img)
 im.show()
 # orig_pil_img.show()
 
