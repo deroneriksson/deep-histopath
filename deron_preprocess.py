@@ -14,6 +14,7 @@ from skimage.feature import canny
 import cv2
 from skimage.morphology import binary_closing, binary_erosion, disk, binary_opening
 from scipy.ndimage.morphology import binary_fill_holes
+from skimage import morphology
 
 
 # from skimage.color import rgb2gray
@@ -393,18 +394,18 @@ def filter_hysteresis_threshold(np_img, low, high, type="uint8"):
 
 
 def filter_entropy(np_img, neigh=7, thresh=5):
-  np_img = np_img / 255
-  np_img = (filters.rank.entropy(np_img, np.ones((neigh, neigh))) > thresh).astype(float)
-  return np_img * 255
+  np_img = (filters.rank.entropy(np_img, np.ones((neigh, neigh))) > thresh).astype("uint8") * 255
+  return np_img
 
 
 def filter_binary_opening_fill_holes_erosion(np_img, type="uint8"):
-  result = binary_opening(np_img, disk(10))
+  result = np_img
+  # result = binary_opening(np_img, disk(10))
   result = binary_fill_holes(result)
-  result = binary_erosion(result, disk(20))
-  result = binary_erosion(result, disk(20))
-  result = binary_erosion(result, disk(20))
-  result = binary_erosion(result, disk(20))
+  result = binary_erosion(result, disk(30))
+  # result = binary_erosion(result, disk(20))
+  # result = binary_erosion(result, disk(20))
+  # result = binary_erosion(result, disk(20))
   if type == "bool":
     return result
   elif type == "float":
@@ -412,18 +413,32 @@ def filter_binary_opening_fill_holes_erosion(np_img, type="uint8"):
   else:
     return (255 * result).astype("uint8")
 
+def filter_binary_fill_holes(np_img):
+  result = binary_fill_holes(np_img)
+  return result
+
+def filter_binary_erosion(np_img, size=5, iterations=1):
+  for num in range(0, iterations):
+    np_img = binary_erosion(np_img, disk(size))
+  return np_img
 
 def uint8_to_mask(np_img):
   """
-  Convert Numpy array of 0 and 255 values to 0 and 1 uint8 values
+  Convert Numpy array of 255 and 0 uint8 values to True and False bool values
 
   Args:
     np_img: Image as Numpy array.
 
   Returns:
-    Numpy array of 0 and 1 values.
+    Numpy array of bool values.
   """
-  mask = (np_img / 255).astype("uint8")
+  mask = (np_img / 255).astype(bool)
+  return mask
+
+
+def filter_remove_small_objects(mask, min_size=3000):
+  mask = mask.astype(bool) #make sure mask is boolean
+  mask = morphology.remove_small_objects(mask, min_size=min_size)
   return mask
 
 
@@ -463,10 +478,49 @@ np_img = filter_complement(np_img)
 np_to_pil(np_img).convert("RGB").save(folder + "03-COMPLEMENT.jpg")
 ar_info(np_img, "Complement")
 
-np_img = filter_hysteresis_threshold(np_img, 50, 100)
-np_to_pil(np_img).convert("RGB").save(folder + "04-HYSTERESIS-THRESHOLD.jpg")
-ar_info(np_img, "Hysteresis Threshold")
+entropy = filter_entropy(np_img, 9, 5)
+np_to_pil(entropy).convert("RGB").save(folder + "04-ENTROPY.jpg")
+ar_info(entropy, "Entropy")
+mask_entropy = uint8_to_mask(entropy)
+ar_info(mask_entropy, "Entropy Mask")
 
+hysteresis_thresh = filter_hysteresis_threshold(np_img, 50, 100)
+np_to_pil(hysteresis_thresh).convert("RGB").save(folder + "05-HYSTERESIS-THRESHOLD.jpg")
+ar_info(hysteresis_thresh, "Hysteresis Threshold")
+mask_hysteresis_thresh = uint8_to_mask(hysteresis_thresh)
+ar_info(mask_hysteresis_thresh, "Hysteresis Threshold Mask")
+
+mask = mask_entropy & mask_hysteresis_thresh
+ar_info(mask, "Logical AND Entropy Mask and Hysteresis Threshold Mask")
+
+mask = filter_remove_small_objects(mask)
+ar_info(mask, "Remove Small Objects Mask")
+
+mask = filter_binary_fill_holes(mask)
+ar_info(mask, "Binary Fill Holes Mask")
+
+mask = filter_binary_erosion(mask, iterations=5)
+ar_info(mask, "Binary Erosion Mask")
+
+mask = mask & mask_hysteresis_thresh
+ar_info(mask, "Reapply Hysteresis Threshold Mask")
+
+# mask = filter_binary_erosion(mask, iterations=2)
+# ar_info(mask, "Reapply Binary Erosion Mask")
+#
+# mask = filter_binary_fill_holes(mask)
+# ar_info(mask, "Reapply Binary Fill Holes Mask")
+
+# mask = filter_binary_opening_fill_holes_erosion(mask, type="bool")
+
+# mask = morphology.convex_hull_image(mask)
+# ar_info(mask, "Convex Hull")
+
+# mask = morphology.skeletonize(mask)
+# ar_info(mask, "Skeletonize")
+
+np_img = pil_to_np(orig_pil_img) * np.dstack([mask, mask, mask])
+ar_info(np_img, "After Mask")
 # np_img = pil_to_np(orig_pil_img)
 # np_img = filter_rgb_to_grayscale(np_img)
 # np_img = 255*canny(np_img, 0).astype(float)
@@ -474,18 +528,15 @@ ar_info(np_img, "Hysteresis Threshold")
 # np_img = (filters.rank.entropy(np_img/255, np.ones((9, 9))) > 5).astype(float)*255
 # np_img = filters.apply_hysteresis_threshold(np_img, 50, 100)
 
-# np_img = filter_entropy(np_img, 9, 5)
-# np_to_pil(np_img).convert("RGB").save(folder + "04-ENTROPY.jpg")
 # ----------
 
-np_img = filter_binary_opening_fill_holes_erosion(np_img)
-ar_info(np_img, "Binary Opening, Fill Holes, Erosion")
-
-mask = uint8_to_mask(np_img)
-ar_info(mask, "Mask")
-np_img = pil_to_np(orig_pil_img) * np.dstack([mask, mask, mask])
+# np_img = filter_binary_opening_fill_holes_erosion(np_img)
 # np_to_pil(np_img).convert("RGB").save(folder + "05-BINARY-OPENING-FILL-HOLES-EROSION.jpg")
-ar_info(np_img, "After Mask")
+# ar_info(np_img, "Binary Opening, Fill Holes, Erosion")
+
+# mask = uint8_to_mask(np_img)
+# mask = np_img
+# ar_info(mask, "Mask")
 # ----------
 
 # np_img = np_img.astype(float) * 255
