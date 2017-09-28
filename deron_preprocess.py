@@ -19,6 +19,8 @@ from skimage import morphology
 
 # from skimage.color import rgb2gray
 # from skimage.filters import threshold_minimum, threshold_otsu, threshold_yen
+from toolz.functoolz import do
+
 
 def open_slide(filename):
   """
@@ -442,6 +444,93 @@ def filter_remove_small_objects(mask, min_size=3000):
   return mask
 
 
+def do_filters(slide_number):
+  folder = "example_filters" + os.sep
+  img_path = get_train_thumb_path(slide_number)
+  orig_pil_img = Image.open(img_path)
+  orig_pil_img.save(folder + "01-ORIGINAL.jpg")
+  np_img = pil_to_np(orig_pil_img)
+  ar_info(np_img, "Original")
+
+  np_img = filter_rgb_to_grayscale(np_img)
+  np_to_pil(np_img).save(folder + "02-GRAYSCALE.jpg")
+  ar_info(np_img, "Grayscale")
+
+  np_img = filter_complement(np_img)
+  np_to_pil(np_img).save(folder + "03-COMPLEMENT.jpg")
+  ar_info(np_img, "Complement")
+
+  entropy = filter_entropy(np_img, 9, 5)
+  np_to_pil(entropy).save(folder + "04-ENTROPY.jpg")
+  ar_info(entropy, "Entropy")
+  mask_entropy = uint8_to_mask(entropy)
+  ar_info(mask_entropy, "Entropy Mask")
+
+  hysteresis_thresh = filter_hysteresis_threshold(np_img, 50, 100)
+  np_to_pil(hysteresis_thresh).save(folder + "05-HYSTERESIS-THRESHOLD.jpg")
+  ar_info(hysteresis_thresh, "Hysteresis Threshold")
+  mask_hysteresis_thresh = uint8_to_mask(hysteresis_thresh)
+  ar_info(mask_hysteresis_thresh, "Hysteresis Threshold Mask")
+
+  otsu_thresh_value = filters.threshold_otsu(np_img)
+  mask_otsu_thresh = (np_img > otsu_thresh_value)
+  otsu_thresh = mask_otsu_thresh.astype("uint8") * 255
+  ar_info(otsu_thresh, "Otsu Threshold")
+  np_to_pil(otsu_thresh).save(folder + "06-OTSU-THRESHOLD.jpg")
+  ar_info(mask_otsu_thresh, "Otsu Threshold Mask")
+
+  gray_img = filter_rgb_to_grayscale(pil_to_np(orig_pil_img))
+  mask_canny = canny(gray_img, 1, low_threshold=0, high_threshold=25)
+  canny_img = mask_canny.astype("uint8") * 255
+  ar_info(canny_img, "Canny")
+  np_to_pil(canny_img).save(folder + "07-CANNY.jpg")
+  ar_info(mask_canny, "Canny Mask")
+
+  # mask = mask_entropy & mask_hysteresis_thresh & mask_otsu_thresh
+  # ar_info(mask, "Logical AND Entropy Mask, Hysteresis Threshold Mask, and Otsu Threshold Mask")
+  # entropy_hysteresis_otsu = mask.astype("uint8") * 255
+  # np_to_pil(entropy_hysteresis_otsu).save(folder + "07-ENTROPY-HYSTERESIS-OTSU.jpg")
+
+  # mask = mask_entropy | mask_hysteresis_thresh | mask_otsu_thresh
+  mask_e = mask_entropy
+  # mask_e = filter_remove_small_objects(mask_e)
+  # mask_e = filter_binary_fill_holes(mask_e)
+  #
+  mask_h_o = mask_hysteresis_thresh & mask_otsu_thresh
+  # mask_h_o = filter_remove_small_objects(mask_h_o)
+  #
+  # mask = mask_e & mask_h_o
+
+  mask_c = mask_canny
+
+  # mask = mask_h_o ^ mask_e
+  # mask = mask_h_o & mask_e & mask_c
+  mask = mask_c ^ mask_e
+  # mask_entropy = binary_erosion(mask_entropy, disk(2))
+  # mask_entropy = filter_binary_erosion(mask_entropy, size=1, iterations=3)
+  # mask = mask_entropy & mask_hysteresis_thresh & mask_otsu_thresh
+
+  # mask = filter_remove_small_objects(mask)
+  # ar_info(mask, "Remove Small Objects Mask")
+  #
+  # mask = filter_binary_fill_holes(mask)
+  # ar_info(mask, "Binary Fill Holes Mask")
+  #
+  # mask = filter_binary_erosion(mask, iterations=1)
+  # ar_info(mask, "Binary Erosion Mask")
+  #
+  # mask = filter_remove_small_objects(mask, 5000)
+  # ar_info(mask, "Remove Small Objects Mask")
+
+  # mask = mask & mask_hysteresis_thresh
+  # ar_info(mask, "Reapply Hysteresis Threshold Mask")
+
+  np_img = pil_to_np(orig_pil_img) * np.dstack([mask, mask, mask])
+  ar_info(np_img, "After Mask")
+
+  im = np_to_pil(np_img)
+  im.show()
+
 # Constants
 BASE_DIR = "data"
 # BASE_DIR = os.sep + "Volumes" + os.sep + "BigData" + os.sep + "TUPAC"
@@ -453,7 +542,7 @@ THUMB_EXT = ".jpg"
 THUMB_SIZE = 4096
 DEST_TRAIN_THUMB_DIR = BASE_DIR + os.sep + "training_thumbs_" + str(THUMB_SIZE)
 
-start = datetime.datetime.now()
+# start = datetime.datetime.now()
 
 # os.makedirs(DEST_TRAIN_THUMB_DIR, exist_ok=True)
 # slide_to_thumbs(1, 15)
@@ -461,66 +550,107 @@ start = datetime.datetime.now()
 # slide_stats()
 # slide_info()
 
+# do_filters(3)
+
+#
+# folder = "example_filters" + os.sep
+# img_path = get_train_thumb_path(2)
+# orig_pil_img = Image.open(img_path)
+# orig_pil_img.save(folder + "01-ORIGINAL.jpg")
+# np_img = pil_to_np(orig_pil_img)
+# ar_info(np_img, "Original")
+#
+# np_img = filter_rgb_to_grayscale(np_img)
+# np_to_pil(np_img).convert("RGB").save(folder + "02-GRAYSCALE.jpg")
+# ar_info(np_img, "Grayscale")
+#
+# np_img = filter_complement(np_img)
+# np_to_pil(np_img).convert("RGB").save(folder + "03-COMPLEMENT.jpg")
+# ar_info(np_img, "Complement")
+#
+# entropy = filter_entropy(np_img, 9, 5)
+# np_to_pil(entropy).convert("RGB").save(folder + "04-ENTROPY.jpg")
+# ar_info(entropy, "Entropy")
+# mask_entropy = uint8_to_mask(entropy)
+# ar_info(mask_entropy, "Entropy Mask")
+#
+# hysteresis_thresh = filter_hysteresis_threshold(np_img, 50, 100)
+# np_to_pil(hysteresis_thresh).convert("RGB").save(folder + "05-HYSTERESIS-THRESHOLD.jpg")
+# ar_info(hysteresis_thresh, "Hysteresis Threshold")
+# mask_hysteresis_thresh = uint8_to_mask(hysteresis_thresh)
+# ar_info(mask_hysteresis_thresh, "Hysteresis Threshold Mask")
+#
+# otsu_thresh_value = filters.threshold_otsu(np_img)
+# mask_otsu_thresh = (np_img > otsu_thresh_value)
+# otsu_thresh = mask_otsu_thresh.astype("uint8") * 255
+# ar_info(otsu_thresh, "Otsu Threshold")
+# np_to_pil(otsu_thresh).convert("RGB").save(folder + "06-OTSU-THRESHOLD.jpg")
+# ar_info(mask_otsu_thresh, "Otsu Threshold Mask")
+
+# triangle_thresh_value = filters.threshold_triangle(np_img)
+# mask_triangle_thresh = (np_img > triangle_thresh_value)
+# triangle_thresh = mask_triangle_thresh.astype("uint8") * 255
+# ar_info(triangle_thresh, "Triangle Threshold")
+# np_to_pil(triangle_thresh).convert("RGB").save(folder + "06-TRIANGLE-THRESHOLD.jpg")
+# ar_info(mask_triangle_thresh, "Triangle Threshold Mask")
+
+# edges = filters.sobel(np_img)
+# ar_info(edges, "Sobel Edges")
+# edges = (edges * 255).astype("uint8")
+# np_to_pil(edges).convert("RGB").save(folder + "06-SOBEL-EDGES.jpg")
 
 
-folder = "example_filters" + os.sep
-img_path = get_train_thumb_path(2)
-orig_pil_img = Image.open(img_path)
-orig_pil_img.save(folder + "01-ORIGINAL.jpg")
-np_img = pil_to_np(orig_pil_img)
-ar_info(np_img, "Original")
+# canny_img = pil_to_np(orig_pil_img)
+# canny_img = filter_rgb_to_grayscale(canny_img)
+# # canny_img = filter_complement(canny_img)
+# ar_info(canny_img, "BLAH")
+# # plt.imshow(canny_img)
+# # plt.show()
+# # im = np_to_pil(canny_img)
+# # im.show()
+# canny_img = canny_img / 255
+# canny_img = canny(canny_img, 10) *255
+# canny_img2 = canny(canny_img, sigma=2)
+# ar_info(canny_img2, "BLAH2")
+# plt.imshow(canny_img, cmap=plt.cm.gray)
+# plt.show()
+# canny_img = 255*canny(canny_img, 1).astype(float)
+# np_to_pil(canny_img).convert("RGB").save(folder + "06-CANNY-EDGES.jpg")
 
-np_img = filter_rgb_to_grayscale(np_img)
-np_to_pil(np_img).convert("RGB").save(folder + "02-GRAYSCALE.jpg")
-ar_info(np_img, "Grayscale")
+# can = canny(np_img, 1)
+# ar_info(can, "Canny Edges 1")
+# canny_edges = can.astype("uint8") * 255
+# ar_info(canny_edges, "Canny Edges 2")
+# np_to_pil(canny_edges).convert("RGB").save(folder + "06-CANNY-EDGES.jpg")
 
-np_img = filter_complement(np_img)
-np_to_pil(np_img).convert("RGB").save(folder + "03-COMPLEMENT.jpg")
-ar_info(np_img, "Complement")
 
-entropy = filter_entropy(np_img, 9, 5)
-np_to_pil(entropy).convert("RGB").save(folder + "04-ENTROPY.jpg")
-ar_info(entropy, "Entropy")
-mask_entropy = uint8_to_mask(entropy)
-ar_info(mask_entropy, "Entropy Mask")
 
-hysteresis_thresh = filter_hysteresis_threshold(np_img, 50, 100)
-np_to_pil(hysteresis_thresh).convert("RGB").save(folder + "05-HYSTERESIS-THRESHOLD.jpg")
-ar_info(hysteresis_thresh, "Hysteresis Threshold")
-mask_hysteresis_thresh = uint8_to_mask(hysteresis_thresh)
-ar_info(mask_hysteresis_thresh, "Hysteresis Threshold Mask")
-
-mask = mask_entropy & mask_hysteresis_thresh
-ar_info(mask, "Logical AND Entropy Mask and Hysteresis Threshold Mask")
-
-mask = filter_remove_small_objects(mask)
-ar_info(mask, "Remove Small Objects Mask")
-
-mask = filter_binary_fill_holes(mask)
-ar_info(mask, "Binary Fill Holes Mask")
-
-mask = filter_binary_erosion(mask, iterations=5)
-ar_info(mask, "Binary Erosion Mask")
-
-mask = mask & mask_hysteresis_thresh
-ar_info(mask, "Reapply Hysteresis Threshold Mask")
-
-# mask = filter_binary_erosion(mask, iterations=2)
-# ar_info(mask, "Reapply Binary Erosion Mask")
+# mask = mask_entropy & mask_hysteresis_thresh
+# ar_info(mask, "Logical AND Entropy Mask and Hysteresis Threshold Mask")
+#
+# mask = mask_entropy & mask_hysteresis_thresh & mask_otsu_thresh
+# ar_info(mask, "Logical AND Entropy Mask, Hysteresis Threshold Mask, and Otsu Threshold Mask")
+#
+# mask = filter_remove_small_objects(mask)
+# ar_info(mask, "Remove Small Objects Mask")
 #
 # mask = filter_binary_fill_holes(mask)
-# ar_info(mask, "Reapply Binary Fill Holes Mask")
+# ar_info(mask, "Binary Fill Holes Mask")
+#
+# mask = filter_binary_erosion(mask, iterations=5)
+# ar_info(mask, "Binary Erosion Mask")
+#
+# mask = filter_remove_small_objects(mask, 5000)
+# ar_info(mask, "Remove Small Objects Mask")
+#
+# # mask = mask & mask_hysteresis_thresh
+# # ar_info(mask, "Reapply Hysteresis Threshold Mask")
+#
+#
+# np_img = pil_to_np(orig_pil_img) * np.dstack([mask, mask, mask])
+# ar_info(np_img, "After Mask")
 
-# mask = filter_binary_opening_fill_holes_erosion(mask, type="bool")
 
-# mask = morphology.convex_hull_image(mask)
-# ar_info(mask, "Convex Hull")
-
-# mask = morphology.skeletonize(mask)
-# ar_info(mask, "Skeletonize")
-
-np_img = pil_to_np(orig_pil_img) * np.dstack([mask, mask, mask])
-ar_info(np_img, "After Mask")
 # np_img = pil_to_np(orig_pil_img)
 # np_img = filter_rgb_to_grayscale(np_img)
 # np_img = 255*canny(np_img, 0).astype(float)
@@ -593,11 +723,11 @@ from skimage.color import rgb2hed
 # plt.show()
 # np_img = mask.astype(float)
 
-# np_img = np_img * 255
-im = np_to_pil(np_img)
-im.show()
-# orig_pil_img.show()
+# # np_img = np_img * 255
+# im = np_to_pil(np_img)
+# im.show()
+# # orig_pil_img.show()
 
-end = datetime.datetime.now()
-delta = end - start
-print(str(delta))
+# end = datetime.datetime.now()
+# delta = end - start
+# print(str(delta))
