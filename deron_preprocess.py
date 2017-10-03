@@ -1,5 +1,6 @@
 import glob
 import os
+import sys
 import openslide
 from openslide import OpenSlideError
 import PIL
@@ -166,25 +167,40 @@ def slide_stats():
 
   max_width = 0
   max_height = 0
+  min_width = sys.maxsize
+  min_height = sys.maxsize
   total_width = 0
   total_height = 0
   total_size = 0
   which_max_width = 0
   which_max_height = 0
+  which_min_width = 0
+  which_min_height = 0
   max_size = 0
+  min_size = sys.maxsize
   which_max_size = 0
+  which_min_size = 0
   for z in range(0, num_train_images):
     (width, height) = slide_stats[z]
     if width > max_width:
       max_width = width
       which_max_width = z + 1
+    if width < min_width:
+      min_width = width
+      which_min_width = z + 1
     if height > max_height:
       max_height = height
       which_max_height = z + 1
+    if height < min_height:
+      min_height = height
+      which_min_height = z + 1
     size = width * height
     if size > max_size:
       max_size = size
       which_max_size = z + 1
+    if size < min_size:
+      min_size = size
+      which_min_size = z + 1
     total_width = total_width + width
     total_height = total_height + height
     total_size = total_size + size
@@ -195,13 +211,19 @@ def slide_stats():
 
   print("Max width: %d pixels" % max_width)
   print("Max height: %d pixels" % max_height)
-  print("Max size: %d pixels" % max_size)
+  print("Max size: %d pixels (%dMP)" % (max_size, (max_size/1024/1024)))
+  print("Min width: %d pixels" % min_width)
+  print("Min height: %d pixels" % min_height)
+  print("Min size: %d pixels (%dMP)" % (min_size, (min_size/1024/1024)))
   print("Avg width: %d pixels" % avg_width)
   print("Avg height: %d pixels" % avg_height)
-  print("Avg size: %d pixels" % avg_size)
+  print("Avg size: %d pixels (%dMP)" % (avg_size, (avg_size/1024/1024)))
   print("Max width slide #%d" % which_max_width)
   print("Max height slide #%d" % which_max_height)
   print("Max size slide #%d" % which_max_size)
+  print("Min width slide #%d" % which_min_width)
+  print("Min height slide #%d" % which_min_height)
+  print("Min size slide #%d" % which_min_size)
 
   x, y = zip(*slide_stats)
   colors = np.random.rand(num_train_images)
@@ -505,7 +527,27 @@ def do_filters(slide_number):
 
   # mask = mask_h_o ^ mask_e
   # mask = mask_h_o & mask_e & mask_c
-  mask = mask_c ^ mask_e
+  # mask = mask_c ^ mask_e
+  mask_c_or_e_or_h_o = mask_c | mask_e | mask_h_o
+  c_or_e_or_h_o_img = pil_to_np(orig_pil_img) * np.dstack([mask_c_or_e_or_h_o, mask_c_or_e_or_h_o, mask_c_or_e_or_h_o])
+  np_to_pil(c_or_e_or_h_o_img).save(folder + "08-C-OR-E-OR-H-O.jpg")
+
+  mask_c_and_e_and_h_o = mask_c & mask_e & mask_h_o
+  c_and_e_and_h_o_img = pil_to_np(orig_pil_img) * np.dstack([mask_c_and_e_and_h_o, mask_c_and_e_and_h_o, mask_c_and_e_and_h_o])
+  np_to_pil(c_and_e_and_h_o_img).save(folder + "08-C-AND-E-AND-H-O.jpg")
+
+  mask_c_or_e = mask_c | mask_e
+  c_or_e = pil_to_np(orig_pil_img) * np.dstack([mask_c_or_e, mask_c_or_e, mask_c_or_e])
+  np_to_pil(c_or_e).save(folder + "08-C-OR-E.jpg")
+
+  mask_c_and_e = mask_c & mask_e
+  c_and_e = pil_to_np(orig_pil_img) * np.dstack([mask_c_and_e, mask_c_and_e, mask_c_and_e])
+  np_to_pil(c_and_e).save(folder + "08-C-AND-E.jpg")
+
+  mask_c_xor_e = mask_c ^ mask_e
+  c_xor_e = pil_to_np(orig_pil_img) * np.dstack([mask_c_xor_e, mask_c_xor_e, mask_c_xor_e])
+  np_to_pil(c_xor_e).save(folder + "08-C-XOR-E.jpg")
+
   # mask_entropy = binary_erosion(mask_entropy, disk(2))
   # mask_entropy = filter_binary_erosion(mask_entropy, size=1, iterations=3)
   # mask = mask_entropy & mask_hysteresis_thresh & mask_otsu_thresh
@@ -525,6 +567,8 @@ def do_filters(slide_number):
   # mask = mask & mask_hysteresis_thresh
   # ar_info(mask, "Reapply Hysteresis Threshold Mask")
 
+  mask = mask_c_or_e
+
   np_img = pil_to_np(orig_pil_img) * np.dstack([mask, mask, mask])
   ar_info(np_img, "After Mask")
 
@@ -532,8 +576,8 @@ def do_filters(slide_number):
   im.show()
 
 # Constants
-BASE_DIR = "data"
-# BASE_DIR = os.sep + "Volumes" + os.sep + "BigData" + os.sep + "TUPAC"
+# BASE_DIR = "data"
+BASE_DIR = os.sep + "Volumes" + os.sep + "BigData" + os.sep + "TUPAC"
 SRC_TRAIN_IMG_DIR = BASE_DIR + os.sep + "training_image_data"
 TRAIN_THUMB_SUFFIX = "thumb-"
 TRAIN_IMG_PREFIX = "TUPAC-TR-"
@@ -542,12 +586,12 @@ THUMB_EXT = ".jpg"
 THUMB_SIZE = 4096
 DEST_TRAIN_THUMB_DIR = BASE_DIR + os.sep + "training_thumbs_" + str(THUMB_SIZE)
 
-# start = datetime.datetime.now()
+start = datetime.datetime.now()
 
 # os.makedirs(DEST_TRAIN_THUMB_DIR, exist_ok=True)
 # slide_to_thumbs(1, 15)
 # multiprocess_slide_to_thumbs()
-# slide_stats()
+slide_stats()
 # slide_info()
 
 # do_filters(3)
@@ -728,6 +772,6 @@ from skimage.color import rgb2hed
 # im.show()
 # # orig_pil_img.show()
 
-# end = datetime.datetime.now()
-# delta = end - start
-# print(str(delta))
+end = datetime.datetime.now()
+delta = end - start
+print(str(delta))
