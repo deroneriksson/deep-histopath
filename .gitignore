@@ -3,9 +3,5 @@ docs/wsi-preprocessing-in-python/_site
 experiments
 model
 *.zip
-.DS_Store
-.idea/
-.project
-**/__pycache__
 **/filters*.html
 **/tiles*.html
